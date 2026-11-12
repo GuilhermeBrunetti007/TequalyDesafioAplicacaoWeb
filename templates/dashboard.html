@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard · Portal de Solicitações{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+    <div>
+        <h3 class="fw-bold mb-1">Painel de Indicadores</h3>
+        <p class="text-muted small mb-0">
+            {% if usuario.perfil == 'ANALISTA' %}
+                Visão gerencial consolidada de todas as solicitações registradas no sistema.
+            {% else %}
+                Acompanhamento das solicitações abertas por você ({{ usuario.nome }}).
+            {% endif %}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/solicitacoes" class="btn btn-primary fw-semibold" style="background-color: #5b21b6; border-color: #5b21b6;">
+            <i class="bi bi-plus-lg me-1"></i>Nova Solicitação
+        </a>
+    </div>
+</div>
+
+<!-- 4 Cartões de Indicadores (Total, Abertas, Em análise, Concluídas) -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card p-3 h-100 border-start border-4 border-primary">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="text-muted small fw-semibold text-uppercase">Total Registrado</span>
+                    <div class="metric-value text-dark mt-2">{{ total }}</div>
+                </div>
+                <span class="badge bg-primary bg-opacity-10 text-primary p-2 rounded-3">
+                    <i class="bi bi-collection fs-5"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card p-3 h-100 border-start border-4 border-warning">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="text-muted small fw-semibold text-uppercase">Abertas</span>
+                    <div class="metric-value text-warning mt-2">{{ abertas }}</div>
+                </div>
+                <span class="badge bg-warning bg-opacity-10 text-warning p-2 rounded-3">
+                    <i class="bi bi-exclamation-circle fs-5"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card p-3 h-100 border-start border-4 border-info">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="text-muted small fw-semibold text-uppercase">Em análise</span>
+                    <div class="metric-value text-info mt-2">{{ em_analise }}</div>
+                </div>
+                <span class="badge bg-info bg-opacity-10 text-info p-2 rounded-3">
+                    <i class="bi bi-hourglass-split fs-5"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-sm-6 col-lg-3">
+        <div class="card p-3 h-100 border-start border-4 border-success">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <span class="text-muted small fw-semibold text-uppercase">Concluídas</span>
+                    <div class="metric-value text-success mt-2">{{ concluidas }}</div>
+                </div>
+                <span class="badge bg-success bg-opacity-10 text-success p-2 rounded-3">
+                    <i class="bi bi-check2-circle fs-5"></i>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Gráficos Chart.js -->
+<div class="row g-4 mb-4">
+    <div class="col-md-5">
+        <div class="card p-4 h-100">
+            <h6 class="fw-bold mb-1">Distribuição por Status</h6>
+            <p class="text-muted small mb-3">Proporção de chamados por situação atual</p>
+            <div style="max-height: 260px;" class="d-flex justify-content-center align-items-center">
+                <canvas id="graficoStatus"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card p-4 h-100">
+            <h6 class="fw-bold mb-1">Solicitações por Categoria</h6>
+            <p class="text-muted small mb-3">Volume de demandas por área de atendimento</p>
+            <div style="max-height: 260px;">
+                <canvas id="graficoCategorias"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tabela de Solicitações Recentes -->
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold mb-0">Solicitações Recentes</h6>
+        <a href="/solicitacoes" class="small text-decoration-none fw-semibold">
+            Ver todas <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+                <tr>
+                    <th>ID</th>
+                    <th>Título</th>
+                    <th>Categoria</th>
+                    <th>Prioridade</th>
+                    <th>Solicitante</th>
+                    <th>Data</th>
+                    <th>Situação</th>
+                    <th class="text-end">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sol in ultimas_solicitacoes %}
+                <tr>
+                    <td class="fw-semibold text-secondary">#{{ sol.id }}</td>
+                    <td class="fw-semibold">{{ sol.titulo }}</td>
+                    <td><span class="badge bg-light text-dark border">{{ sol.categoria }}</span></td>
+                    <td>
+                        {% if sol.prioridade == 'Alta' %}
+                            <span class="badge bg-danger bg-opacity-10 text-danger">Alta</span>
+                        {% elif sol.prioridade == 'Média' %}
+                            <span class="badge bg-warning bg-opacity-10 text-dark">Média</span>
+                        {% else %}
+                            <span class="badge bg-secondary bg-opacity-10 text-secondary">Baixa</span>
+                        {% endif %}
+                    </td>
+                    <td class="small text-muted">{{ sol.usuario.nome if sol.usuario else '-' }}</td>
+                    <td class="small text-muted">{{ sol.criada_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>
+                        {% if sol.status == 'Concluída' %}
+                            <span class="badge bg-success">Concluída</span>
+                        {% elif sol.status == 'Em análise' %}
+                            <span class="badge bg-info text-dark">Em análise</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">Aberta</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <a href="/solicitacoes/{{ sol.id }}" class="btn btn-sm btn-outline-primary">
+                            Detalhes
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        Nenhuma solicitação registrada até o momento.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const labelsStatus = {{ labels_status | tojson }};
+    const valoresStatus = {{ valores_status | tojson }};
+    const labelsCategorias = {{ labels_categorias | tojson }};
+    const valoresCategorias = {{ valores_categorias | tojson }};
+
+    new Chart(document.getElementById('graficoStatus'), {
+        type: 'doughnut',
+        data: {
+            labels: labelsStatus,
+            datasets: [{
+                data: valoresStatus,
+                backgroundColor: ['#ffc107', '#0dcaf0', '#198754'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+
+    new Chart(document.getElementById('graficoCategorias'), {
+        type: 'bar',
+        data: {
+            labels: labelsCategorias,
+            datasets: [{
+                label: 'Solicitações',
+                data: valoresCategorias,
+                backgroundColor: '#6b21a8',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+</script>
+{% endblock %}

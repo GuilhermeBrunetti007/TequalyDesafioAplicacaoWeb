@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Solicitação #{{ solicitacao.id }} · Portal de Solicitações{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/solicitacoes" class="text-decoration-none small fw-semibold">
+        <i class="bi bi-arrow-left me-1"></i>Voltar para a listagem de solicitações
+    </a>
+</div>
+
+<div class="row g-4">
+    <!-- Coluna Principal: Dados do Chamado e Anexos -->
+    <div class="col-lg-8">
+        <div class="card p-4 mb-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3 pb-3 border-bottom">
+                <div>
+                    <span class="text-muted small fw-semibold">SOLICITAÇÃO #{{ solicitacao.id }}</span>
+                    <h4 class="fw-bold mb-1">{{ solicitacao.titulo }}</h4>
+                    <div class="text-muted small">
+                        Aberta por <strong>{{ solicitacao.usuario.nome }}</strong> ({{ solicitacao.usuario.email }})
+                        em {{ solicitacao.criada_em.strftime('%d/%m/%Y às %H:%M') }}
+                    </div>
+                </div>
+                <div>
+                    {% if solicitacao.status == 'Concluída' %}
+                        <span class="badge bg-success fs-6 px-3 py-2">Concluída</span>
+                    {% elif solicitacao.status == 'Em análise' %}
+                        <span class="badge bg-info text-dark fs-6 px-3 py-2">Em análise</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark fs-6 px-3 py-2">Aberta</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row g-3 mb-4">
+                <div class="col-sm-4">
+                    <div class="p-3 rounded bg-light border">
+                        <div class="text-muted small">Categoria</div>
+                        <div class="fw-bold">{{ solicitacao.categoria }}</div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="p-3 rounded bg-light border">
+                        <div class="text-muted small">Prioridade</div>
+                        <div class="fw-bold">{{ solicitacao.prioridade }}</div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <div class="p-3 rounded bg-light border">
+                        <div class="text-muted small">Status Atual</div>
+                        <div class="fw-bold">{{ solicitacao.status }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <h6 class="fw-bold text-uppercase small text-muted mb-2">Descrição da Solicitação</h6>
+                <div class="p-3 rounded bg-light border" style="white-space: pre-line;">{{ solicitacao.descricao }}</div>
+            </div>
+
+            <div>
+                <h6 class="fw-bold text-uppercase small text-muted mb-2">
+                    <i class="bi bi-paperclip me-1"></i>Anexos da Solicitação
+                </h6>
+                {% if solicitacao.anexos %}
+                <div class="list-group">
+                    {% for anexo in solicitacao.anexos %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-semibold">{{ anexo.nome_original }}</div>
+                            <div class="small text-muted">
+                                Tipo: {{ anexo.tipo }} · Tamanho: {{ (anexo.tamanho / 1024) | round(1) }} KB
+                            </div>
+                        </div>
+                        <a href="/anexos/{{ anexo.id }}/download" class="btn btn-sm btn-primary">
+                            <i class="bi bi-download me-1"></i>Baixar Anexo
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-muted small fst-italic">
+                    Nenhum anexo enviado nesta solicitação.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Coluna Lateral: Alteração de Status (Analista) e Histórico -->
+    <div class="col-lg-4">
+        {% if usuario.perfil == 'ANALISTA' %}
+        <div class="card p-4 mb-4 border-start border-4 border-warning">
+            <h6 class="fw-bold mb-1">
+                <i class="bi bi-sliders me-1 text-warning"></i>Gestão de Atendimento (Analista)
+            </h6>
+            <p class="text-muted small mb-3">
+                Altere o status da solicitação. A mudança será registrada automaticamente no histórico.
+            </p>
+            <form method="post" action="/solicitacoes/{{ solicitacao.id }}/status">
+                <div class="mb-3">
+                    <label for="novo_status" class="form-label small fw-semibold">Novo Status</label>
+                    <select class="form-select" id="novo_status" name="novo_status" required>
+                        {% for st in status_opcoes_analista %}
+                        <option value="{{ st }}" {% if solicitacao.status == st %}selected{% endif %}>{{ st }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-warning w-100 fw-semibold">
+                    <i class="bi bi-check2-square me-1"></i>Atualizar Status
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <div class="card p-4">
+            <h6 class="fw-bold mb-3">
+                <i class="bi bi-clock-history me-1 text-primary"></i>Histórico de Status
+            </h6>
+            {% if solicitacao.historico %}
+            <div class="list-group list-group-flush">
+                {% for item in solicitacao.historico %}
+                <div class="list-group-item px-0 py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="badge bg-secondary">{{ item.status_anterior }}</span>
+                        <i class="bi bi-arrow-right text-muted small"></i>
+                        <span class="badge bg-primary">{{ item.novo_status }}</span>
+                    </div>
+                    <div class="small text-muted mt-1">
+                        Por <strong>{{ item.usuario.nome if item.usuario else 'Analista' }}</strong>
+                        em {{ item.data.strftime('%d/%m/%Y às %H:%M') }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-muted small mb-0">
+                Nenhuma alteração de status registrada ainda (permanece no status inicial <strong>{{ solicitacao.status }}</strong>).
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

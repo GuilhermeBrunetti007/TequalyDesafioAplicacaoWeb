@@ -103,7 +103,9 @@
                     <label for="novo_status" class="form-label small fw-semibold">Novo Status</label>
                     <select class="form-select" id="novo_status" name="novo_status" required>
                         {% for st in status_opcoes_analista %}
-                        <option value="{{ st }}" {% if solicitacao.status == st %}selected{% endif %}>{{ st }}</option>
+                        <option value="{{ st }}" {% if solicitacao.status == st %}selected{% endif %}>
+                            {{ st }}{% if solicitacao.status == st %} (Status atual){% endif %}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>

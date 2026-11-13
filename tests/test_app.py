@@ -284,3 +284,58 @@ def test_dashboard_e_exportacao_csv_respeitando_perfil(ambiente_teste):
     resp_dash = client_analista.get("/dashboard")
     assert resp_dash.status_code == 200
     assert "Painel de Indicadores" in resp_dash.text
+
+
+def test_bloqueio_cadastro_solicitacao_titulo_em_branco(ambiente_teste):
+    client_joao = autenticar_cliente("joao@empresa.com")
+
+    resp = client_joao.post(
+        "/solicitacoes",
+        data={
+            "titulo": "     ",
+            "descricao": "Descrição válida da solicitação.",
+            "categoria": "TI",
+            "prioridade": "Média",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 400
+    assert "obrigatórios" in resp.json()["detail"]
+
+
+def test_nao_duplicacao_de_historico_quando_status_igual(ambiente_teste):
+    db = ambiente_teste
+
+    client_joao = autenticar_cliente("joao@empresa.com")
+    client_joao.post(
+        "/solicitacoes",
+        data={
+            "titulo": "Revisão de acesso VPN",
+            "descricao": "Solicito revisão do perfil de rede.",
+            "categoria": "TI",
+            "prioridade": "Alta",
+        },
+        follow_redirects=False,
+    )
+    solicitacao = db.query(Solicitacao).first()
+
+    client_analista = autenticar_cliente("analista@empresa.com")
+    client_analista.post(
+        f"/solicitacoes/{solicitacao.id}/status",
+        data={"novo_status": "Em análise"},
+        follow_redirects=False,
+    )
+    # Envia novamente o mesmo status "Em análise"
+    client_analista.post(
+        f"/solicitacoes/{solicitacao.id}/status",
+        data={"novo_status": "Em análise"},
+        follow_redirects=False,
+    )
+
+    historicos = (
+        db.query(HistoricoStatus)
+        .filter(HistoricoStatus.solicitacao_id == solicitacao.id)
+        .all()
+    )
+    assert len(historicos) == 1
+    assert historicos[0].novo_status == "Em análise"

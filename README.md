@@ -112,4 +112,4 @@ O script `seed.py` cria automaticamente 1 usuário com perfil **Analista**, 2 us
 
 ## 5. Uso de ferramentas de IA
 
-Durante o desenvolvimento deste projeto, utilizei ferramentas de IA (**ChatGPT / GitHub Copilot**) como apoio na estruturação visual dos templates HTML com classes do Bootstrap 5, na geração da massa de dados fictícios do `seed.py` e na revisão da configuração inicial do Alembic. Todas as regras de negócio, consultas SQLAlchemy, validações de segurança e testes foram revisados e validados localmente.
+Durante o desenvolvimento deste projeto, utilizei o **Gemini** como ferramenta de apoio para revisar a modelagem relacional e as relações do banco de dados, estruturar os templates HTML com Bootstrap 5 e auxiliar na depuração, correções de bugs e validação dos testes. Todas as regras de negócio, consultas SQLAlchemy, validações de segurança e testes foram revisados e validados localmente.

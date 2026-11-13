@@ -70,6 +70,44 @@ TIPOS_MIME_MAP = {
     ".png": "image/png",
 }
 TAMANHO_MAXIMO_BYTES = 5 * 1024 * 1024  # 5 MB
+TAMANHO_MAXIMO_TITULO = 200
+
+
+def converter_periodo_datas(
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
+) -> tuple[Optional[datetime], Optional[datetime]]:
+    """Converte strings de data (YYYY-MM-DD) com segurança e valida se o período é consistente."""
+    dt_inicio = None
+    dt_fim = None
+
+    if data_inicio and data_inicio.strip():
+        try:
+            dt_inicio = datetime.strptime(data_inicio.strip(), "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formato de data inicial inválido. Utilize AAAA-MM-DD.",
+            )
+
+    if data_fim and data_fim.strip():
+        try:
+            dt_fim = datetime.strptime(data_fim.strip(), "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59
+            )
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formato de data final inválido. Utilize AAAA-MM-DD.",
+            )
+
+    if dt_inicio and dt_fim and dt_inicio > dt_fim:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A data inicial não pode ser maior que a data final.",
+        )
+
+    return dt_inicio, dt_fim
 
 
 def aplicar_filtros_solicitacoes(
@@ -86,34 +124,26 @@ def aplicar_filtros_solicitacoes(
     if status_filtro and status_filtro in STATUS_VALIDOS:
         query = query.filter(Solicitacao.status == status_filtro)
 
-    if data_inicio:
-        try:
-            dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d")
-            query = query.filter(Solicitacao.criada_em >= dt_inicio)
-        except ValueError:
-            pass
+    dt_inicio, dt_fim = converter_periodo_datas(data_inicio, data_fim)
 
-    if data_fim:
-        try:
-            dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").replace(
-                hour=23, minute=59, second=59
-            )
-            query = query.filter(Solicitacao.criada_em <= dt_fim)
-        except ValueError:
-            pass
+    if dt_inicio:
+        query = query.filter(Solicitacao.criada_em >= dt_inicio)
+
+    if dt_fim:
+        query = query.filter(Solicitacao.criada_em <= dt_fim)
 
     return query
 
 
 def validar_e_salvar_anexo(arquivo: UploadFile) -> dict:
     """
-    Valida extensão (.pdf, .jpg, .png) e tamanho máximo (5 MB) no backend,
-    salvando o arquivo renomeado com UUID4 em storage/uploads/.
+    Valida extensão (.pdf, .jpg, .png), rejeita arquivos vazios (0 bytes) e verifica
+    o tamanho máximo (5 MB) no backend, salvando o arquivo renomeado com UUID4 em storage/uploads/.
     """
-    nome_original = os.path.basename(arquivo.filename or "")
+    nome_original = os.path.basename((arquivo.filename or "").strip())
     _, extensao = os.path.splitext(nome_original.lower())
 
-    if extensao not in EXTENSOES_PERMITIDAS:
+    if not nome_original or extensao not in EXTENSOES_PERMITIDAS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Formato de arquivo inválido. Apenas arquivos .pdf, .jpg e .png são permitidos.",
@@ -125,7 +155,7 @@ def validar_e_salvar_anexo(arquivo: UploadFile) -> dict:
     if tamanho == 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="O arquivo enviado está vazio.",
+            detail="O arquivo enviado está vazio (0 bytes). Selecione um arquivo válido.",
         )
 
     if tamanho > TAMANHO_MAXIMO_BYTES:
@@ -283,9 +313,16 @@ def listar_solicitacoes(
     )
 
     query = db.query(Solicitacao)
-    query = aplicar_filtros_solicitacoes(
-        query, usuario, filtro_status_efetivo, data_inicio, data_fim
-    )
+    try:
+        query = aplicar_filtros_solicitacoes(
+            query, usuario, filtro_status_efetivo, data_inicio, data_fim
+        )
+    except HTTPException as exc:
+        erro = exc.detail
+        query = aplicar_filtros_solicitacoes(
+            db.query(Solicitacao), usuario, filtro_status_efetivo
+        )
+
     solicitacoes = query.order_by(
         Solicitacao.criada_em.desc(), Solicitacao.id.desc()
     ).all()
@@ -324,7 +361,13 @@ def criar_solicitacao(
     if not titulo_limpo or not descricao_limpa:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Título e descrição são obrigatórios.",
+            detail="Título e descrição são obrigatórios e não podem conter apenas espaços em branco.",
+        )
+
+    if len(titulo_limpo) > TAMANHO_MAXIMO_TITULO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"O título deve ter no máximo {TAMANHO_MAXIMO_TITULO} caracteres.",
         )
 
     if categoria not in CATEGORIAS_VALIDAS:
@@ -477,7 +520,8 @@ def atualizar_status_solicitacao(
     analista: Usuario = Depends(exigir_analista),
     db: Session = Depends(get_db),
 ):
-    if novo_status not in STATUS_ALTERACAO_ANALISTA:
+    novo_status_limpo = novo_status.strip()
+    if novo_status_limpo not in STATUS_ALTERACAO_ANALISTA:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Status inválido. O Analista pode alterar apenas para: {', '.join(STATUS_ALTERACAO_ANALISTA)}.",
@@ -493,17 +537,22 @@ def atualizar_status_solicitacao(
         )
 
     status_anterior = solicitacao.status
-    if status_anterior != novo_status:
-        solicitacao.status = novo_status
-        registro_historico = HistoricoStatus(
-            solicitacao_id=solicitacao.id,
-            usuario_id=analista.id,
-            status_anterior=status_anterior,
-            novo_status=novo_status,
-            data=datetime.now(),
+    if status_anterior == novo_status_limpo:
+        return RedirectResponse(
+            url=f"/solicitacoes/{solicitacao.id}?sucesso=A+solicita%C3%A7%C3%A3o+j%C3%A1+se+encontra+com+este+status",
+            status_code=status.HTTP_303_SEE_OTHER,
         )
-        db.add(registro_historico)
-        db.commit()
+
+    solicitacao.status = novo_status_limpo
+    registro_historico = HistoricoStatus(
+        solicitacao_id=solicitacao.id,
+        usuario_id=analista.id,
+        status_anterior=status_anterior,
+        novo_status=novo_status_limpo,
+        data=datetime.now(),
+    )
+    db.add(registro_historico)
+    db.commit()
 
     return RedirectResponse(
         url=f"/solicitacoes/{solicitacao.id}?sucesso=Status+atualizado+com+sucesso",

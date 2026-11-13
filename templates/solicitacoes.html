@@ -17,7 +17,8 @@
             <form method="post" action="/solicitacoes" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="titulo" class="form-label small fw-semibold">Título *</label>
-                    <input type="text" class="form-control" id="titulo" name="titulo" placeholder="Ex.: Acesso ao sistema de projetos" required>
+                    <input type="text" class="form-control" id="titulo" name="titulo" maxlength="200" placeholder="Ex.: Acesso ao sistema de projetos" required>
+                    <div class="form-text small">Máximo de 200 caracteres.</div>
                 </div>
 
                 <div class="row g-2 mb-3">
